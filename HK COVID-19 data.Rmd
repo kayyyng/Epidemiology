@@ -1,0 +1,58 @@
+---
+title: "HK COVID-19 data"
+output: html_document
+---
+
+```{r echo=FALSE, message = FALSE, warning = FALSE}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(EpiEstim)
+df <- read_csv("http://www.chp.gov.hk/files/misc/enhanced_sur_covid_19_eng.csv")
+df$`Report date` <- as.Date(df$`Report date`, "%d/%m/%Y")
+df$`Date of onset` <- as.Date(df$`Date of onset`, "%d/%m/%Y")
+df$`Case classification*` <- factor(df$`Case classification*`, levels = unique(df$`Case classification*`))
+```
+As of `r Sys.time()` <br>
+Latest confirmed case on `r df[nrow(df),2]` <br>
+Total number of cases: `r as.integer(df[nrow(df),1])`
+```{r echo=FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.height= 7}
+ggplot(df, aes(x=`Report date`, fill = `Case classification*`)) + geom_bar(position = position_stack(reverse = TRUE)) + ggtitle("Epidemic Curve") + xlim(min(df$`Report date`), Sys.Date()+1)
+
+```
+
+```{r echo=FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.height= 7}
+df$age_group <- cut(df$Age, breaks=c(0,10,20,30,40,50,60,70,80,90,100,Inf), include.lowest = TRUE)
+ggplot(df, aes(x=age_group, fill=`Hospitalised/Discharged/Deceased`)) + geom_bar(position = "stack") + ggtitle("Age Distribution")
+```
+
+```{r echo=FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.height= 7}
+case_fatality <- df %>%
+  subset(`Hospitalised/Discharged/Deceased` %in% c("Discharged", "Deceased")) %>%
+  count(age_group, `Hospitalised/Discharged/Deceased`)
+rate <- data.frame(matrix(0, nrow = length(unique(case_fatality$age_group)), ncol = 3))
+colnames(rate) = c("age_group", "Discharged", "Deceased")
+rate$age_group <- unique(case_fatality$age_group)
+for (i in 1:nrow(case_fatality)) {
+  rate[as.character(case_fatality[i,1]), as.character(case_fatality[i, 2])] <- case_fatality[i,3]
+}
+rate <- mutate(rate, case_fatality_rate = Deceased/(Deceased+Discharged))
+ggplot(rate, aes(x=age_group, y= case_fatality_rate)) + geom_point() + geom_line(aes(group=1)) + ggtitle("Crude Case-fatality Rate") + ylim(0,0.5)
+```
+
+```{r echo=FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.height= 7}
+df$`Date of onset`[is.na(df$`Date of onset`)] = df$`Report date`[is.na(df$`Date of onset`)]
+incidence3 <- dplyr::filter(df, `Case classification*` %in% 
+                              c("Possibly local case","Local case",
+                                "Epidemiologically linked with local case",
+                                "Epidemiologically linked with possibly local case")) %>%
+  dplyr::group_by(`Date of onset`) %>%
+  dplyr::summarise(I = n()) %>%
+  dplyr::rename(dates = `Date of onset`) %>% 
+  na.omit()
+
+R_onset_local <- estimate_R(incidence3, method="parametric_si",
+                          config = make_config(list( mean_si = 5.4,
+                                                     std_si = 3.8)))
+plot(R_onset_local, legend=FALSE)
+```
