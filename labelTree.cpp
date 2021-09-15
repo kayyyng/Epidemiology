@@ -1,3 +1,10 @@
+// Annotate each strain in a phylogenetic tree based on single nucleotide polymorphisms
+// Input: 
+// - variant annotation of genomes
+// - Newick phylogenetic tree of the same set of genomes
+// Output:
+// - Newick phylogenetic tree with single nucleotide polymorphisms labelled
+
 #include <iostream>
 #include <string>
 #include <fstream>
